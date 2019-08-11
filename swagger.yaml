@@ -1,0 +1,245 @@
+---
+swagger: '2.0'
+basePath: /prod
+info:
+  title: <<stack>>
+  version: '1'
+schemes:
+- "https"
+x-amazon-apigateway-request-validators:
+  all:
+    validateRequestBody: true
+    validateRequestParameters: true
+paths:
+
+  /v1/:
+    post:
+      x-amazon-apigateway-request-validator: all
+      consumes:
+        - "application/json"
+#      parameters:
+#        - in: body
+#          name: examplebody
+#          description: Example Body
+#          required: true
+#          schema:
+#            $ref: '#/definitions/ExampleBody'
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        400:
+          description: "400 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        500:
+          description: "500 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        503:
+          description: "503 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        504:
+          description: "504 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+      security:
+        - api_key: []
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          .*timed out.*:
+            statusCode: "504"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : \"Request timed out.\"}"
+          Client error.*:
+            statusCode: "400"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : $input.json('$.errorMessage')}"
+          Service error.*:
+            statusCode: "500"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : $input.json('$.errorMessage')}"
+          Process exited.*:
+            statusCode: "503"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : $input.json('$.errorMessage')}"
+        uri: arn:aws:apigateway:<<region>>:lambda:path/2015-03-31/functions/arn:aws:lambda:<<region>>:<<accountId>>:function:${stageVariables.UploadInventoryFunctionName}/invocations
+        passthroughBehavior: "when_no_templates"
+        httpMethod: "POST"
+        type: "aws"
+    options:
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          schema:
+            $ref: "#/definitions/Empty"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+            Access-Control-Allow-Methods:
+              type: "string"
+            Access-Control-Allow-Headers:
+              type: "string"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'POST,GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        requestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        passthroughBehavior: "when_no_match"
+        type: "mock"
+
+  /v1/jobs/:
+    get:
+      x-amazon-apigateway-request-validator: all
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - name: job_id
+          in: query
+          required: true
+          type: string
+      responses:
+        200:
+          description: "200 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        400:
+          description: "400 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        500:
+          description: "500 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        503:
+          description: "503 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+        504:
+          description: "504 response"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+      security:
+        - api_key: []
+      x-amazon-apigateway-integration:
+        requestTemplates:
+          application/json: |-
+            {
+              "job_id" : "$input.params('job_id')"
+            }
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+          .*timed out.*:
+            statusCode: "504"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : \"Request timed out.\"}"
+          Client error.*:
+            statusCode: "400"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : $input.json('$.errorMessage')}"
+          Service error.*:
+            statusCode: "500"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : $input.json('$.errorMessage')}"
+          Process exited.*:
+            statusCode: "503"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: "{\"message\" : $input.json('$.errorMessage')}"
+        uri: arn:aws:apigateway:<<region>>:lambda:path/2015-03-31/functions/arn:aws:lambda:<<region>>:<<accountId>>:function:${stageVariables.CheckResultsFunctionName}/invocations
+        passthroughBehavior: "when_no_templates"
+        httpMethod: "POST"
+        type: "aws"
+    options:
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      responses:
+        200:
+          description: "200 response"
+          schema:
+            $ref: "#/definitions/Empty"
+          headers:
+            Access-Control-Allow-Origin:
+              type: "string"
+            Access-Control-Allow-Methods:
+              type: "string"
+            Access-Control-Allow-Headers:
+              type: "string"
+      x-amazon-apigateway-integration:
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        requestTemplates:
+          application/json: "{\"statusCode\": 200}"
+        passthroughBehavior: "when_no_match"
+        type: "mock"
+
+securityDefinitions:
+  api_key:
+    type: "apiKey"
+    name: "x-api-key"
+    in: "header"
+definitions:
+  ExampleBody:
+    type: object
+    title: "Example Body"
+    required:
+      - example_required_key
+    properties:
+      example_required_key:
+        type: string
+      example_non_required_key:
+        type: string

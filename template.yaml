@@ -1,0 +1,237 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: icalculator microservice.
+
+Parameters:
+  ServiceName:
+    Type: String
+  StageName:
+    Type: String
+  CodeBucketName:
+    Type: String
+  CodeKey:
+    Type: String
+  SwaggerKey:
+    Type: String
+  EnvironmentType:
+    Description: Environment type.
+    Type: String
+    AllowedValues: [prod, dev]
+    ConstraintDescription: must specify prod or dev.
+
+Conditions:
+  UseProdCondition:
+    !Equals [!Ref EnvironmentType, prod]
+
+Resources:
+  ##########################################################################################
+  # Shared Resources / Roles
+  ##########################################################################################
+
+  ICalculatorInvokeCalculateFunctionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: "ICalculatorInvokeCalculateFunctionPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - 'lambda:InvokeFunction'
+            Resource:
+              - !GetAtt CalculateFunction.Arn
+      Roles:
+        - !Ref ICalculatorBaseRole
+
+  ICalculatorBaseRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: "AllowLambdaServiceToAssumeRole"
+            Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Policies:
+        - PolicyName: "AssumeCrossAccountLoggingRole"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: "Allow"
+              Action:
+              - 'sts:AssumeRole'
+              Resource: arn:aws:iam::405028608951:role/us-east-1-LoggingCrossAccount
+        - PolicyName: "ICalculatorInventorySourceAccess"
+          PolicyDocument:
+            Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                    - s3:GetObject
+                  Resource: !Sub
+                    - 'arn:aws:s3:::${Bucket}/*'
+                    - { Bucket: !Ref InventorySourceBucket }
+        - PolicyName: "ICalculatorJobsTableAccess"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                - !GetAtt JobsTable.Arn
+
+
+  ##########################################################################################
+  # API Gateway configuration
+  ##########################################################################################
+  Api:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      BodyS3Location:
+        Bucket: !Ref CodeBucketName
+        Key: !Ref SwaggerKey
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref Api
+
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Action: "sts:AssumeRole"
+          Principal:
+            Service:
+              - apigateway.amazonaws.com
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref Api
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+      Variables:
+        ApiRoleName: !Ref ApiRole
+        CheckResultsFunctionName: !Ref CheckResultsFunction
+        UploadInventoryFunctionName: !Ref UploadInventoryFunction
+
+  ApiCheckResultsFunctionInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CheckResultsFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/*/*'
+        - { API: !Ref Api }
+
+  ApiUploadInventoryFunctionInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt UploadInventoryFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${API}/*/*'
+        - { API: !Ref Api }
+
+  ##########################################################################################
+  # Lambda handlers
+  ##########################################################################################
+
+  CheckResultsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt ICalculatorBaseRole.Arn
+      Handler: icalculator.handlers.check_results
+      Runtime: python3.6
+      Code:
+        S3Bucket: !Ref CodeBucketName
+        S3Key: !Ref CodeKey
+      MemorySize: 128
+      Timeout: 300
+      Environment:
+        Variables:
+          APP_NAME: !Ref ServiceName
+          ENV_TYPE: !Ref EnvironmentType
+          JOBS_TABLE: !Ref JobsTable
+
+  UploadInventoryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt ICalculatorBaseRole.Arn
+      Handler: icalculator.handlers.upload_inventory
+      Runtime: python3.6
+      Code:
+        S3Bucket: !Ref CodeBucketName
+        S3Key: !Ref CodeKey
+      MemorySize: 128
+      Timeout: 300
+      Environment:
+        Variables:
+          APP_NAME: !Ref ServiceName
+          ENV_TYPE: !Ref EnvironmentType
+          INVENTORY_SOURCE_BUCKET: !Ref InventorySourceBucket
+          JOBS_TABLE: !Ref JobsTable
+          WORKER_CALCULATE_FUNCTION: !Ref CalculateFunction
+
+  CalculateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Role: !GetAtt ICalculatorBaseRole.Arn
+      Handler: icalculator.handlers.calculate
+      Runtime: python3.6
+      Code:
+        S3Bucket: !Ref CodeBucketName
+        S3Key: !Ref CodeKey
+      MemorySize: 128
+      Timeout: 300
+      Environment:
+        Variables:
+          APP_NAME: !Ref ServiceName
+          ENV_TYPE: !Ref EnvironmentType
+          INVENTORY_SOURCE_BUCKET: !Ref InventorySourceBucket
+          JOBS_TABLE: !Ref JobsTable
+
+  ##########################################################################################
+  #  S3
+  ##########################################################################################
+
+  InventorySourceBucket:
+    Type: AWS::S3::Bucket
+    Properties: {}
+
+ ###########################################################################################
+  # DynamoDB Table
+ ###########################################################################################
+
+  JobsTable:
+    Type: "AWS::DynamoDB::Table"
+    Properties:
+      KeySchema:
+        -
+          AttributeName: "job_id"
+          KeyType: "HASH"
+      AttributeDefinitions:
+        -
+          AttributeName: "job_id"
+          AttributeType: "S"
+      ProvisionedThroughput:
+        ReadCapacityUnits: !If [UseProdCondition, 15, 5]
+        WriteCapacityUnits: !If [UseProdCondition, 15, 5]
